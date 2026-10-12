@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ResultCard from "./ResultCard";
+import { API_BASE } from "../config";
 
 export default function ConsumerPanel() {
   const [file, setFile] = useState(null);
@@ -14,7 +15,7 @@ export default function ConsumerPanel() {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch("http://127.0.0.1:5000/consumer/verify", {
+  const res = await fetch(`${API_BASE}/consumer/verify`, {
     method: "POST",
     body: formData
   });

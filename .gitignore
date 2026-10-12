@@ -27,4 +27,8 @@ Thumbs.db
 # Node modules
 node_modules/
 
+# Legacy Frontend
+frontend/
+
 **/.DS_Store
+

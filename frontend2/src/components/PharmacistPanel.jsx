@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ResultCard from "./ResultCard";
+import { API_BASE } from "../config";
 
 export default function PharmacistPanel() {
   const [file, setFile] = useState(null);
@@ -15,7 +16,7 @@ export default function PharmacistPanel() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://127.0.0.1:5000/pharmacist/verify", {
+      const res = await fetch(`${API_BASE}/pharmacist/verify`, {
         method: "POST",
         body: formData
       });

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import ResultCard from "./ResultCard";
+import { API_BASE } from "../config";
 
 export default function ManufacturerPanel() {
   const [templateFile, setTemplateFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleGenerate = async () => {
+  const generate = async () => {
     if (!templateFile) return alert("Upload packaging template");
 
     const formData = new FormData();
@@ -14,7 +15,7 @@ export default function ManufacturerPanel() {
 
     setLoading(true);
 
-    const res = await fetch("http://127.0.0.1:5000/manufacturer/generate", {
+    const res = await fetch(`${API_BASE}/manufacturer/generate`, {
       method: "POST",
       body: formData,
     });

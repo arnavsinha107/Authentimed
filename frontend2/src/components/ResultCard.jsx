@@ -1,129 +1,150 @@
-const API_BASE = "http://127.0.0.1:5000";
+import { API_BASE } from "../config";
 
 export default function ResultCard({ result }) {
   if (!result) return null;
 
   const verdict = result["Final Verdict"];
   const status = result["Status"];
+  const reason = result["Reason"];
+  const isGenuine = verdict === "GENUINE" || verdict === "VERIFIED" || status === "Registered On-Chain";
+  const isWarning = verdict === "UNVERIFIED";
+  const isFake = verdict === "COUNTERFEIT" || verdict === "ERROR" || (!isGenuine && !isWarning);
 
-  let title = "";
-  let cardClass = "result-neutral";
+  let cardStyleClass = "verdict-neutral";
+  let verdictTitle = "SCAN RESULT";
+  let iconSymbol = "ℹ";
+  let badgeLabel = "AUDIT COMPLETE";
 
-  // -----------------------------
-  // Manufacturer Registration
-  // -----------------------------
-  if (status === "Registered On-Chain") {
-    title = "✔ PRODUCT REGISTERED";
-    cardClass = "result-success";
+  if (isGenuine) {
+    cardStyleClass = "verdict-genuine";
+    verdictTitle = status === "Registered On-Chain" ? "PRODUCT REGISTERED ON-CHAIN" : "GENUINE PRODUCT CONFIRMED";
+    iconSymbol = "✓";
+    badgeLabel = "AUTHENTICATED";
+  } else if (isWarning) {
+    cardStyleClass = "verdict-warning";
+    verdictTitle = "AWAITING PHARMACIST VERIFICATION";
+    iconSymbol = "⚠";
+    badgeLabel = "UNVERIFIED STOCK";
+  } else if (isFake) {
+    cardStyleClass = "verdict-fake";
+    verdictTitle = "COUNTERFEIT ALERT DETECTED";
+    iconSymbol = "✕";
+    badgeLabel = "SECURITY VIOLATION";
   }
 
-  // -----------------------------
-  // Verification Logic
-  // -----------------------------
-  else if (verdict === "GENUINE") {
-    title = "✔ GENUINE PRODUCT";
-    cardClass = "result-success";
-  }
-
-  else if (verdict === "VERIFIED") {
-    title = "✔ VERIFIED";
-    cardClass = "result-success";
-  }
-
-  else if (verdict === "UNVERIFIED") {
-    title = "⚠ NOT YET PHARMACIST VERIFIED";
-    cardClass = "result-warning";
-  }
-
-  else if (verdict === "COUNTERFEIT") {
-    title = "✖ COUNTERFEIT";
-    cardClass = "result-fail";
-  }
-
-  const hasLinked = result["Product ID"] && result["Strip code"];
+  // Scan metadata helpers
+  const productId = result["Product ID"] || result.product_id;
+  const stripCode = result["Strip code"] || result["PAN Code"] || result.strip_code || result.pan_code;
+  const scanCount = result["Scan Count"] || result.scan_count;
+  const firstScan = result["First Scan"] || result.first_scan_time;
+  const lastScan = result["Last Scan"] || result.last_scan_time;
 
   return (
-    <div className={`result-card ${cardClass}`}>
-      <h2>{title}</h2>
-
-      {hasLinked && (
-        <p className="product-identity" style={{ marginBottom: "4px" }}>
-          <strong>Product:</strong> {result["Product ID"]} <span style={{ color: "#666" }}>(QR)</span>
-          {" · "}
-          <strong>{result["Strip code"]}</strong> <span style={{ color: "#666" }}>(strip)</span>
-        </p>
-      )}
-      {result["Product ID"] && !result["Strip code"] && (
-        <p><strong>Product ID:</strong> {result["Product ID"]}</p>
-      )}
-      {result["Strip code"] && !result["Product ID"] && (
-        <p><strong>Strip code:</strong> {result["Strip code"]}</p>
-      )}
-
-      {result["Linked"] && (
-        <p style={{ fontSize: "0.9em", color: "#555" }}>{result["Linked"]}</p>
-      )}
-
-      {result["Reason"] && (
-        <p><strong>Reason:</strong> {result["Reason"]}</p>
-      )}
-
-      {result["Message"] && (
-        <p>{result["Message"]}</p>
-      )}
-
-      {result["First Scan Time"] && (
-        <p><strong>First Scan:</strong> {String(result["First Scan Time"])}</p>
-      )}
-
-      {result["Factor"] && (
-        <p><strong>Verified via:</strong> {result["Factor"] === "qr" ? "QR" : "Strip code"}</p>
-      )}
-
-      {result["Flag"] && (
-        <p style={{ color: "#c00" }}><strong>Flag:</strong> {result["Flag"]}</p>
-      )}
-
-      {result["images"] && (
-        <div style={{ marginTop: "15px", display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "flex-start" }}>
-          {result.images.packaged && (
-            <div>
-              <strong>Packaged (template + QR)</strong>
-              <img
-                src={`${API_BASE}${result.images.packaged}`}
-                alt="Packaged"
-                style={{ width: "250px", display: "block", marginTop: "4px" }}
-              />
-            </div>
-          )}
-          {result.images.hidden && (
-            <div>
-              <strong>Hidden code</strong>
-              <img
-                src={`${API_BASE}${result.images.hidden}`}
-                alt="Hidden"
-                style={{ width: "120px", display: "block", marginTop: "4px" }}
-              />
-            </div>
-          )}
-          {result.images.red_reveal && (
-            <div>
-              <strong>Reveals (in folder)</strong>
-              <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                <img src={`${API_BASE}${result.images.red_reveal}`} alt="Red" style={{ width: "80px", display: "block" }} />
-                {result.images.blue_reveal && <img src={`${API_BASE}${result.images.blue_reveal}`} alt="Blue" style={{ width: "80px", display: "block" }} />}
-                {result.images.green_reveal && <img src={`${API_BASE}${result.images.green_reveal}`} alt="Green" style={{ width: "80px", display: "block" }} />}
-              </div>
-            </div>
-          )}
+    <div className={`result-card ${cardStyleClass}`}>
+      <div className="verdict-header">
+        <div className="verdict-icon-box">{iconSymbol}</div>
+        <div>
+          <h3 className="verdict-title">{verdictTitle}</h3>
+          <p style={{ color: "var(--text-muted)", fontSize: "14px", marginTop: "2px" }}>
+            {reason || result["Message"] || (isGenuine ? "Passed dual-factor OpenCV & Sepolia blockchain validation." : "Verification failed or mismatched parameters.")}
+          </p>
         </div>
-      )}
-      {result["Packaged Image"] && !result["images"] && (
-        <img
-          src={`${API_BASE}${result["Packaged Image"]}`}
-          alt="Packaged"
-          style={{ width: "250px", marginTop: "15px" }}
-        />
+        <span className="verdict-badge">{badgeLabel}</span>
+      </div>
+
+      {/* Metadata Grid */}
+      <div className="result-meta-grid">
+        {productId && (
+          <div className="meta-item">
+            <div className="meta-label">Product Identifier</div>
+            <div className="meta-val" style={{ color: "var(--emerald-400)", fontWeight: "700" }}>
+              {productId}
+            </div>
+          </div>
+        )}
+
+        {stripCode && (
+          <div className="meta-item">
+            <div className="meta-label">Decoded Strip Code</div>
+            <div className="meta-val" style={{ letterSpacing: "1px" }}>
+              {stripCode}
+            </div>
+          </div>
+        )}
+
+        {result["Verification Type"] && (
+          <div className="meta-item">
+            <div className="meta-label">Verification Type</div>
+            <div className="meta-val">{result["Verification Type"]}</div>
+          </div>
+        )}
+
+        {scanCount !== undefined && scanCount !== null && (
+          <div className="meta-item">
+            <div className="meta-label">Scan History Count</div>
+            <div className="meta-val">{scanCount} time(s)</div>
+          </div>
+        )}
+
+        {firstScan && (
+          <div className="meta-item">
+            <div className="meta-label">First Recorded Scan</div>
+            <div className="meta-val" style={{ fontSize: "12px" }}>{String(firstScan)}</div>
+          </div>
+        )}
+
+        {lastScan && (
+          <div className="meta-item">
+            <div className="meta-label">Latest Recorded Scan</div>
+            <div className="meta-val" style={{ fontSize: "12px" }}>{String(lastScan)}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Optical Channels / Artifacts */}
+      {result.images && Object.keys(result.images).length > 0 && (
+        <div className="result-artifacts">
+          <div className="artifacts-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            Computer Vision Decomposition Channels
+          </div>
+
+          <div className="artifact-grid">
+            {result.images.packaged && (
+              <div className="artifact-card">
+                <img src={`${API_BASE}${result.images.packaged}`} alt="Packaged" />
+                <span className="artifact-label">Packaged Box</span>
+              </div>
+            )}
+            {result.images.hidden && (
+              <div className="artifact-card">
+                <img src={`${API_BASE}${result.images.hidden}`} alt="Stego Strip" />
+                <span className="artifact-label">Optical Stego Strip</span>
+              </div>
+            )}
+            {result.images.red_reveal && (
+              <div className="artifact-card">
+                <img src={`${API_BASE}${result.images.red_reveal}`} alt="Red Channel" />
+                <span className="artifact-label">Red Channel Extract</span>
+              </div>
+            )}
+            {result.images.blue_reveal && (
+              <div className="artifact-card">
+                <img src={`${API_BASE}${result.images.blue_reveal}`} alt="Blue Channel" />
+                <span className="artifact-label">Blue Channel Extract</span>
+              </div>
+            )}
+            {result.images.green_reveal && (
+              <div className="artifact-card">
+                <img src={`${API_BASE}${result.images.green_reveal}`} alt="Green Channel" />
+                <span className="artifact-label">Green Channel Extract</span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

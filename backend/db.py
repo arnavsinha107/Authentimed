@@ -15,14 +15,28 @@ if "supabase.com" in DATABASE_URL and "sslmode" not in DATABASE_URL:
     DATABASE_URL = DATABASE_URL + ("&" if "?" in DATABASE_URL else "?") + "sslmode=require"
 
 
+LOCAL_DATABASE_URL = "postgresql://localhost:5432/authentimed"
+
+
 def get_connection():
-    return psycopg2.connect(DATABASE_URL)
+    try:
+        return psycopg2.connect(DATABASE_URL)
+    except psycopg2.OperationalError:
+        if DATABASE_URL != LOCAL_DATABASE_URL:
+            return psycopg2.connect(LOCAL_DATABASE_URL)
+        raise
 
 
 
 def _conn(url=None):
     """Connection using DATABASE_URL or optional url."""
-    return psycopg2.connect(url or DATABASE_URL)
+    target = url or DATABASE_URL
+    try:
+        return psycopg2.connect(target)
+    except psycopg2.OperationalError:
+        if target != LOCAL_DATABASE_URL:
+            return psycopg2.connect(LOCAL_DATABASE_URL)
+        raise
 
 
 def init_db():
