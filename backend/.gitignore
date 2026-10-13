@@ -1,25 +1,23 @@
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .venv/
+env/
+venv/
 
-# Node
-node_modules/
-dist/
-
-# Environment
+# Environment & Credentials
 .env
+.env.*
+!.env.example
+database_url
 
-# Mac
-.DS_Store
-
-# Uploads
-uploads/
+# Runtime Uploads & Generated Temporary Files
+uploads/*
+!uploads/.gitkeep
+temp/*
+!temp/.gitkeep
 qr_codes/
 
-# Vite
-.vite/
-frontend/
-
-
-ai-auth/.DS_Store
+# OS
+.DS_Store

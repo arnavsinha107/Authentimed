@@ -1,4 +1,27 @@
-# Python cache
+# ==========================================
+# Authentimed Global .gitignore
+# ==========================================
+
+# Operating System Files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Documents & Presentation Binaries
+*.docx
+*.pptx
+*.pdf
+~$*
+*.tmp
+
+# Local AI Context & Documentation Scratch
+context.md
+CODEBASE_CONTEXT.md
+generate_report2_docx.py
+build_case_study_docx.py
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -7,28 +30,42 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-
-# Virtual environments
+.venv/
 venv/
-ENV/
 env/
+ENV/
 
-# IDE
+# Node.js & Vite
+node_modules/
+**/node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Blockchain (Hardhat)
+blockchain/artifacts/
+blockchain/cache/
+
+# Environment Variables & Secrets
+.env
+.env.*
+*.env
+!.env.example
+!backend/.env.example
+backend/.env
+database_url
+
+# IDE & Editor Configurations
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Node modules
-node_modules/
-
-# Legacy Frontend
-frontend/
-
-**/.DS_Store
-
+# Backend Runtime Folders
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/temp/*
+!backend/temp/.gitkeep
+backend/qr_codes/
