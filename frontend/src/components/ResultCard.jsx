@@ -6,16 +6,26 @@ export default function ResultCard({ result }) {
   const verdict = result["Final Verdict"];
   const status = result["Status"];
   const reason = result["Reason"];
-  const isGenuine = verdict === "GENUINE" || verdict === "VERIFIED" || status === "Registered On-Chain";
+  const flag = result["Flag"];
+  const isGenuine = verdict === "GENUINE" || verdict === "VERIFIED" || status === "Registered On-Chain" || status === "Verified By Pharmacist";
   const isWarning = verdict === "UNVERIFIED";
-  const isFake = verdict === "COUNTERFEIT" || verdict === "ERROR" || (!isGenuine && !isWarning);
+  const isReplay =
+    status === "REPLAY_DETECTED" ||
+    (typeof flag === "string" && (flag.toLowerCase().includes("replay") || flag.toLowerCase().includes("duplicate"))) ||
+    (typeof reason === "string" && (reason.toLowerCase().includes("replay") || reason.toLowerCase().includes("duplicate")));
+  const isFake = isReplay || verdict === "COUNTERFEIT" || verdict === "ERROR" || (!isGenuine && !isWarning);
 
   let cardStyleClass = "verdict-neutral";
   let verdictTitle = "SCAN RESULT";
   let iconSymbol = "ℹ";
   let badgeLabel = "AUDIT COMPLETE";
 
-  if (isGenuine) {
+  if (isReplay) {
+    cardStyleClass = "verdict-replay";
+    verdictTitle = "REPLAY ATTACK DETECTED";
+    iconSymbol = "⚠️";
+    badgeLabel = "REPLAY DETECTED";
+  } else if (isGenuine) {
     cardStyleClass = "verdict-genuine";
     verdictTitle = status === "Registered On-Chain" ? "PRODUCT REGISTERED ON-CHAIN" : "GENUINE PRODUCT CONFIRMED";
     iconSymbol = "✓";
@@ -35,9 +45,11 @@ export default function ResultCard({ result }) {
   // Scan metadata helpers
   const productId = result["Product ID"] || result.product_id;
   const stripCode = result["Strip code"] || result["PAN Code"] || result.strip_code || result.pan_code;
-  const scanCount = result["Scan Count"] || result.scan_count;
-  const firstScan = result["First Scan"] || result.first_scan_time;
+  const scanCount = result["Scan Count"] !== undefined ? result["Scan Count"] : result.scan_count;
+  const firstScan = result["First Scan"] || result.first_scan_time || result["First Scan Time"];
   const lastScan = result["Last Scan"] || result.last_scan_time;
+  const blockchainState = result["Blockchain State"];
+  const txHash = result["Tx Hash"];
 
   return (
     <div className={`result-card ${cardStyleClass}`}>
@@ -52,12 +64,26 @@ export default function ResultCard({ result }) {
         <span className="verdict-badge">{badgeLabel}</span>
       </div>
 
+      {/* Prominent Replay Warning Banner */}
+      {isReplay && (
+        <div className="replay-alert-banner">
+          <div className="replay-alert-icon">⚠️</div>
+          <div className="replay-alert-content">
+            <div className="replay-alert-title">Duplicate / Cloned Scan Blocked</div>
+            <div className="replay-alert-desc">
+              This serialized medicine package was already verified and permanently claimed on the Ethereum Sepolia blockchain.
+              Scanning duplicate packaging or re-dispensing retired inventory violates counterfeit protection protocol.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Metadata Grid */}
       <div className="result-meta-grid">
         {productId && (
           <div className="meta-item">
             <div className="meta-label">Product Identifier</div>
-            <div className="meta-val" style={{ color: "var(--emerald-400)", fontWeight: "700" }}>
+            <div className="meta-val" style={{ color: isReplay ? "var(--rose-400)" : "var(--emerald-400)", fontWeight: "700" }}>
               {productId}
             </div>
           </div>
@@ -82,7 +108,15 @@ export default function ResultCard({ result }) {
         {scanCount !== undefined && scanCount !== null && (
           <div className="meta-item">
             <div className="meta-label">Scan History Count</div>
-            <div className="meta-val">{scanCount} time(s)</div>
+            <div
+              className="meta-val"
+              style={{
+                color: scanCount > 1 ? "var(--rose-400)" : "var(--emerald-400)",
+                fontWeight: "700",
+              }}
+            >
+              {scanCount} time(s) {scanCount > 1 ? "(Duplicate Replay)" : "(Initial Scan)"}
+            </div>
           </div>
         )}
 
@@ -97,6 +131,38 @@ export default function ResultCard({ result }) {
           <div className="meta-item">
             <div className="meta-label">Latest Recorded Scan</div>
             <div className="meta-val" style={{ fontSize: "12px" }}>{String(lastScan)}</div>
+          </div>
+        )}
+
+        {blockchainState && (
+          <div className="meta-item">
+            <div className="meta-label">Ledger Lifecycle State</div>
+            <div
+              className="meta-val"
+              style={{
+                color: isReplay ? "var(--rose-400)" : "var(--emerald-400)",
+                fontWeight: "700",
+                fontSize: "13px",
+              }}
+            >
+              {blockchainState}
+            </div>
+          </div>
+        )}
+
+        {txHash && (
+          <div className="meta-item" style={{ gridColumn: "span 2" }}>
+            <div className="meta-label">Sepolia Transaction Hash</div>
+            <div className="meta-val" style={{ fontSize: "12px", fontFamily: "monospace", wordBreak: "break-all" }}>
+              <a
+                href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--indigo-400)", textDecoration: "underline" }}
+              >
+                {txHash}
+              </a>
+            </div>
           </div>
         )}
       </div>

@@ -1,6 +1,12 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
+import sys
+
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
 import re
 import uuid
 import qrcode
@@ -17,6 +23,8 @@ from db import (
     record_pharmacist_scan,
     get_any_consumer_scan,
     record_consumer_scan,
+    record_scan,
+    get_scan_info,
 )
 from qr_overlay import replace_qr
 from qr_extractor import extract_qr_data
@@ -250,16 +258,84 @@ def pharmacist_verify():
         # Cross-verify: must be registered on blockchain
         manufacturer = get_manufacturer(product_id)
         if manufacturer == "0x0000000000000000000000000000000000000000":
-            os.remove(scan_path)
+            if os.path.exists(scan_path):
+                os.remove(scan_path)
             return jsonify({
                 "Final Verdict": "COUNTERFEIT",
-                "Reason": "Not registered on blockchain",
+                "Reason": "Product not registered on blockchain (zero manufacturer address)",
                 "Product ID": product_id,
                 "Strip code": strip_code,
                 "Flag": "Product not on chain",
             }), 200
 
-        # Run AI only for full-pack image (QR path). Strip-only or QR-only crop → skip AI, go to blockchain
+        # Query smart contract lifecycle state: 0 = NONE, 1 = VALID, 2 = REPLAYED
+        state = get_product_state(product_id)
+        if state == 0:
+            if os.path.exists(scan_path):
+                os.remove(scan_path)
+            return jsonify({
+                "Final Verdict": "COUNTERFEIT",
+                "Reason": "Product not registered on blockchain (State: NONE)",
+                "Product ID": product_id,
+                "Strip code": strip_code,
+                "Flag": "Product not registered on chain",
+            }), 200
+
+        # -----------------------------------------------------------------
+        # 🛡️ REPLAY DETECTION GUARD
+        # Check both PostgreSQL pharmacist_scans and Ethereum State.REPLAYED
+        # -----------------------------------------------------------------
+        existing = get_pharmacist_scan(product_id)
+        if existing or state == 2:
+            if os.path.exists(scan_path):
+                os.remove(scan_path)
+
+            initial_time = existing.get("scanned_at") if existing else None
+            record_scan(product_id, initial_time=initial_time)
+            scan_info = get_scan_info(product_id)
+            count = scan_info.get("scan_count", 2) if scan_info else 2
+
+            first_time_str = (
+                scan_info["first_scan_time"].strftime("%Y-%m-%d %H:%M:%S UTC")
+                if scan_info and scan_info.get("first_scan_time")
+                else (
+                    existing.get("scanned_at").strftime("%Y-%m-%d %H:%M:%S UTC")
+                    if existing and existing.get("scanned_at")
+                    else "Previously recorded"
+                )
+            )
+            last_time_str = (
+                scan_info["last_scan_time"].strftime("%Y-%m-%d %H:%M:%S UTC")
+                if scan_info and scan_info.get("last_scan_time")
+                else "Just now"
+            )
+
+            return jsonify({
+                "Final Verdict": "COUNTERFEIT",
+                "Status": "REPLAY_DETECTED",
+                "Flag": "Replay attack detected: duplicate pharmacist scan",
+                "Reason": "REPLAY ATTACK DETECTED: This serialized medicine was already verified by a pharmacist and claimed on the Ethereum Sepolia ledger. Duplicate or clone scan rejected.",
+                "Product ID": product_id,
+                "Strip code": strip_code,
+                "Scan Count": count,
+                "First Scan": first_time_str,
+                "Last Scan": last_time_str,
+                "Factor": factor,
+                "Blockchain State": "REPLAYED (State 2)",
+            }), 200
+
+        # If state is neither 0, 1, nor 2
+        if state != 1:
+            if os.path.exists(scan_path):
+                os.remove(scan_path)
+            return jsonify({
+                "Final Verdict": "COUNTERFEIT",
+                "Reason": f"Unrecognized product state on-chain (State: {state})",
+                "Product ID": product_id,
+                "Strip code": strip_code,
+            }), 200
+
+        # Run AI packaging check only for fresh unverified packages
         if factor == "strip":
             run_ai = False  # strip image is never the full pack; skip AI
         else:
@@ -272,52 +348,60 @@ def pharmacist_verify():
             if template_path and os.path.exists(template_path):
                 ai_pass = verify_packaging(scan_path, template_path)
                 if not ai_pass:
-                    os.remove(scan_path)
+                    if os.path.exists(scan_path):
+                        os.remove(scan_path)
                     return jsonify({
                         "Final Verdict": "COUNTERFEIT",
-                        "Reason": "Packaging check failed (AI): image does not match template",
+                        "Reason": "Packaging check failed (AI): image does not match manufacturer template",
                         "Product ID": product_id,
                         "Strip code": strip_code,
+                        "Flag": "Packaging verification failed",
                     }), 200
-        os.remove(scan_path)
 
-        # One scan per product: if already verified (e.g. via QR), scanning connected strip (or vice versa) is flagged
-        existing = get_pharmacist_scan(product_id)
-        if existing:
-            return jsonify({
-                "Final Verdict": "COUNTERFEIT",
-                "Reason": "Already verified; scanning connected code (QR or strip) again is not allowed",
-                "Product ID": product_id,
-                "Strip code": strip_code,
-                "Flag": "Duplicate pharmacist scan",
-            }), 200
+        if os.path.exists(scan_path):
+            os.remove(scan_path)
 
-        state = get_product_state(product_id)
-        if state != 1:
-            return jsonify({
-                "Final Verdict": "COUNTERFEIT",
-                "Reason": "Invalid product state",
-                "Product ID": product_id,
-                "Strip code": strip_code,
-            }), 200
-
+        # Transition smart contract state from VALID (1) to REPLAYED (2)
         tx_result = verify_product(product_id)
         if not tx_result["success"]:
             return jsonify({
                 "Final Verdict": "COUNTERFEIT",
-                "Reason": tx_result.get("error", "Chain error"),
+                "Reason": tx_result.get("error", "Blockchain transaction failed"),
                 "Product ID": product_id,
                 "Strip code": strip_code,
             }), 200
 
+        # Record scan in DB tables
         record_pharmacist_scan(product_id)
+        record_scan(product_id)
+        scan_info = get_scan_info(product_id)
+
+        first_time_str = (
+            scan_info["first_scan_time"].strftime("%Y-%m-%d %H:%M:%S UTC")
+            if scan_info and scan_info.get("first_scan_time")
+            else "Just now"
+        )
+
+        tx_hash = None
+        if tx_result.get("receipt"):
+            rcpt = tx_result["receipt"]
+            th = rcpt.get("transactionHash") if isinstance(rcpt, dict) else getattr(rcpt, "transactionHash", None)
+            if th:
+                tx_hash = th.hex() if hasattr(th, "hex") else str(th)
 
         return jsonify({
             "Final Verdict": "GENUINE",
+            "Status": "Verified By Pharmacist",
             "Scan Status": "First pharmacist scan",
+            "Reason": "Packaging verified and claimed on Ethereum Sepolia ledger.",
             "Product ID": product_id,
             "Strip code": strip_code,
             "Factor": factor,
+            "Scan Count": 1,
+            "First Scan": first_time_str,
+            "Last Scan": first_time_str,
+            "Tx Hash": tx_hash,
+            "Blockchain State": "Transitioned to REPLAYED (State 2)",
         }), 200
 
     except Exception as e:
@@ -419,22 +503,60 @@ def consumer_verify():
         # One verification per product: if already scanned (QR or strip), flag
         existing = get_any_consumer_scan(product_id)
         if existing:
+            record_scan(product_id)
+            scan_info = get_scan_info(product_id)
+            count = scan_info.get("scan_count", 2) if scan_info else 2
+            first_time_str = (
+                scan_info["first_scan_time"].strftime("%Y-%m-%d %H:%M:%S UTC")
+                if scan_info and scan_info.get("first_scan_time")
+                else (
+                    existing.get("scanned_at").strftime("%Y-%m-%d %H:%M:%S UTC")
+                    if existing and existing.get("scanned_at")
+                    else "Previously recorded"
+                )
+            )
+            last_time_str = (
+                scan_info["last_scan_time"].strftime("%Y-%m-%d %H:%M:%S UTC")
+                if scan_info and scan_info.get("last_scan_time")
+                else "Just now"
+            )
             return jsonify({
                 "Final Verdict": "COUNTERFEIT",
-                "Reason": "Already verified (product was previously scanned via QR or strip)",
+                "Status": "REPLAY_DETECTED",
+                "Reason": "REPLAY ATTACK DETECTED: This medicine unit was already verified and dispensed. Secondary consumer verification is prohibited.",
                 "Product ID": product_id,
                 "Strip code": strip_code,
-                "Flag": "Duplicate consumer verification",
+                "Flag": "Duplicate consumer verification / Replay attack",
+                "Scan Count": count,
+                "First Scan": first_time_str,
+                "Last Scan": last_time_str,
+                "Factor": factor,
             }), 200
 
         record_consumer_scan(product_id, factor)
+        record_scan(product_id)
+        scan_info = get_scan_info(product_id)
+
+        first_time_str = (
+            scan_info["first_scan_time"].strftime("%Y-%m-%d %H:%M:%S UTC")
+            if scan_info and scan_info.get("first_scan_time")
+            else (
+                pharmacist_scan.get("scanned_at").strftime("%Y-%m-%d %H:%M:%S UTC")
+                if pharmacist_scan and hasattr(pharmacist_scan.get("scanned_at"), "strftime")
+                else str(pharmacist_scan.get("scanned_at", ""))
+            )
+        )
 
         return jsonify({
             "Final Verdict": "VERIFIED",
+            "Status": "Consumer Verified",
             "Product ID": product_id,
             "Strip code": strip_code,
             "Factor": factor,
             "First Scan Time": pharmacist_scan.get("scanned_at"),
+            "Scan Count": scan_info.get("scan_count", 1) if scan_info else 1,
+            "First Scan": first_time_str,
+            "Last Scan": first_time_str,
         }), 200
 
     except Exception as e:

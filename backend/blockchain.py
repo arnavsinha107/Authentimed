@@ -20,7 +20,8 @@ w3 = Web3(Web3.HTTPProvider(SEPOLIA_RPC_URL))
 # Your deployed contract address (Sepolia)
 contract_address = Web3.to_checksum_address("0xc9d80E54970558025ACE45c0751E039A533777c6")
 
-with open("abi.json") as f:
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(_backend_dir, "abi.json")) as f:
     abi = json.load(f)
 
 contract = w3.eth.contract(address=contract_address, abi=abi)

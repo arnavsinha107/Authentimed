@@ -212,8 +212,8 @@ export default function Pharmacist() {
               <div className="info-step-item">
                 <div className="info-step-bullet" style={{ background: "rgba(129, 140, 248, 0.15)", color: "var(--indigo-400)" }}>✓</div>
                 <div className="info-step-text">
-                  <strong>State 0 ➔ State 1 Transition</strong>
-                  <span>Transitions smart contract status from "Registered" to "Verified By Pharmacist".</span>
+                  <strong>State 1 (VALID) ➔ State 2 (REPLAYED)</strong>
+                  <span>Transitions smart contract status to REPLAYED. Any repeat scan attempt is instantly flagged as a replay attack.</span>
                 </div>
               </div>
 

@@ -104,13 +104,13 @@ def insert_mapping(code, _value=None, database_url=None):
     pass
 
 
-def record_scan(product_id):
+def record_scan(product_id, initial_time=None):
     conn = get_connection()
     cur = conn.cursor()
 
     now = datetime.utcnow()
 
-    cur.execute("SELECT * FROM scans WHERE product_id = %s", (product_id,))
+    cur.execute("SELECT scan_count, first_scan_time FROM scans WHERE product_id = %s", (product_id,))
     row = cur.fetchone()
 
     if row:
@@ -121,10 +121,12 @@ def record_scan(product_id):
             WHERE product_id = %s
         """, (now, product_id))
     else:
+        first_time = initial_time or now
+        count = 2 if initial_time else 1
         cur.execute("""
             INSERT INTO scans (product_id, first_scan_time, scan_count, last_scan_time)
             VALUES (%s, %s, %s, %s)
-        """, (product_id, now, 1, now))
+        """, (product_id, first_time, count, now))
 
     conn.commit()
     cur.close()
