@@ -210,10 +210,17 @@ def extract_code(image_path):
     """Extract code from steganographic image"""
     
     # Load image
-    img = Image.open(image_path)
-    pixels = img.load()
+    img = Image.open(image_path).convert("RGB")
     width, height = img.size
-    
+
+    # Normalize resolution if different from standard 800x800 stego canvas
+    if (width, height) != (800, 800):
+        resample_mode = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.ANTIALIAS
+        img = img.resize((800, 800), resample=resample_mode)
+        width, height = 800, 800
+
+    pixels = img.load()
+
     # Calculate positions
     total_width = TOTAL_CHARACTERS * digit_width + (TOTAL_CHARACTERS - 1) * spacing
     start_x = (width - total_width) // 2

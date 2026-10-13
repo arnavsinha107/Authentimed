@@ -65,12 +65,42 @@ def _normalize_pan_code(code):
     return str(code).strip().upper()
 
 
-def _is_likely_qr_or_strip_only(scan_path, min_side=400):
-    """True if image is small (QR-only or strip-only crop). Such uploads skip AI and go straight to blockchain."""
+def _is_likely_qr_or_strip_only(scan_path):
+    """
+    True if image is a focused crop of the QR code or optical strip rather than the complete medicine packaging.
+    Determined invariant to resolution using QR area coverage ratio and aspect ratio.
+    """
     try:
-        with Image.open(scan_path) as img:
-            w, h = img.size
-        return min(w, h) < min_side
+        from pyzbar.pyzbar import decode
+        import cv2
+
+        img = cv2.imread(scan_path)
+        if img is None:
+            return False
+
+        h, w = img.shape[:2]
+        total_area = float(w * h)
+
+        # Check QR code coverage ratio
+        decoded = decode(img)
+        if decoded:
+            rect = decoded[0].rect
+            qr_area = float(rect.width * rect.height)
+            coverage = qr_area / total_area
+            # If QR occupies > 30% of total image area, it is a QR-only crop
+            if coverage > 0.30:
+                return True
+
+        # Check for strip-like aspect ratio (typically very elongated)
+        aspect = max(w / float(h), h / float(w))
+        if aspect > 3.0:
+            return True
+
+        # Fallback for very small icon-sized images
+        if max(w, h) < 250:
+            return True
+
+        return False
     except Exception:
         return False
 
@@ -151,8 +181,10 @@ def generate_product():
         img = qrcode.make(product_id)
         img.save(qr_path)
 
-        output_path = os.path.join(GENERATED_PACKAGED, f"{product_id}_packaged.png")
-        replace_qr(template_path, qr_path, output_path)
+        qr_x = request.form.get("qr_x", type=float)
+        qr_y = request.form.get("qr_y", type=float)
+        qr_size = request.form.get("qr_size", type=float)
+        replace_qr(template_path, qr_path, output_path, qr_x=qr_x, qr_y=qr_y, qr_size=qr_size)
 
         # Embedded (PAN) strip code: unique in DB, encode to hidden image
         pan_code = generate_unique_code()
