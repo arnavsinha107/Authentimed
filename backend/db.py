@@ -8,14 +8,10 @@ from datetime import datetime
 _backend_dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_backend_dir, ".env"))
 
-# --- Online (Supabase) connection: uncomment below and comment the line above to use .env ---
-_raw_url = os.getenv("DATABASE_URL")
-DATABASE_URL = _raw_url.strip() if (_raw_url and _raw_url.strip()) else "postgresql://localhost:5432/authentimed"
-if "supabase.com" in DATABASE_URL and "sslmode" not in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL + ("&" if "?" in DATABASE_URL else "?") + "sslmode=require"
-
-
+# PostgreSQL / pgAdmin connection
 LOCAL_DATABASE_URL = "postgresql://localhost:5432/authentimed"
+_raw_url = os.getenv("DATABASE_URL")
+DATABASE_URL = _raw_url.strip() if (_raw_url and _raw_url.strip()) else LOCAL_DATABASE_URL
 
 
 def get_connection():
@@ -23,19 +19,34 @@ def get_connection():
         return psycopg2.connect(DATABASE_URL)
     except psycopg2.OperationalError:
         if DATABASE_URL != LOCAL_DATABASE_URL:
-            return psycopg2.connect(LOCAL_DATABASE_URL)
+            try:
+                return psycopg2.connect(LOCAL_DATABASE_URL)
+            except psycopg2.OperationalError:
+                pass
+        # Fallback to local default unix socket / dbname
+        try:
+            return psycopg2.connect("dbname=authentimed")
+        except psycopg2.OperationalError:
+            pass
         raise
 
 
 
 def _conn(url=None):
-    """Connection using DATABASE_URL or optional url."""
+    """Connection using DATABASE_URL, optional url, or local fallback."""
     target = url or DATABASE_URL
     try:
         return psycopg2.connect(target)
     except psycopg2.OperationalError:
         if target != LOCAL_DATABASE_URL:
-            return psycopg2.connect(LOCAL_DATABASE_URL)
+            try:
+                return psycopg2.connect(LOCAL_DATABASE_URL)
+            except psycopg2.OperationalError:
+                pass
+        try:
+            return psycopg2.connect("dbname=authentimed")
+        except psycopg2.OperationalError:
+            pass
         raise
 
 

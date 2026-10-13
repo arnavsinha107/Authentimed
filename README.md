@@ -29,7 +29,7 @@ Consumer → Dual-factor authenticity verification (QR + Blister strip)
 * **Frontend** – React 19 + Vite (Responsive multi-role dashboard)
 * **Backend** – Flask REST API (Modular orchestration microservice)
 * **Blockchain** – Solidity ^0.8.28 deployed on Ethereum Sepolia Testnet
-* **Database** – PostgreSQL (Supabase) for off-chain relational tracking
+* **Database** – PostgreSQL (pgAdmin / local) for off-chain relational tracking
 * **Computer Vision** – OpenCV + PIL for packaging feature extraction & RGB steganographic channel separation
 
 ---
@@ -71,7 +71,7 @@ Consumer → Dual-factor authenticity verification (QR + Blister strip)
 | **Backend** | Python 3.10+, Flask, Flask-CORS, Pyzbar, Pillow |
 | **Computer Vision** | OpenCV (`cv2`), NumPy, Matplotlib |
 | **Blockchain** | Solidity ^0.8.28, Hardhat, Web3.py, Sepolia Testnet |
-| **Database** | PostgreSQL, Supabase, `psycopg2` |
+| **Database** | PostgreSQL (pgAdmin), `psycopg2` |
 
 ---
 
@@ -90,7 +90,7 @@ authentimed/
 │   ├── qr_extractor.py     # Pyzbar / OpenCV QR code reader
 │   ├── revealer.py         # RGB color channel separation
 │   ├── extractor.py        # Steganographic bit-pattern decoder
-│   ├── db.py               # Supabase PostgreSQL interface & ORM
+│   ├── db.py               # PostgreSQL (pgAdmin) interface & ORM
 │   ├── abi.json            # ProductRegistry contract ABI
 │   └── .env.example        # Environment variable template
 │
@@ -169,6 +169,6 @@ npx hardhat run scripts/deploy.js --network sepolia
 ## 🔐 Security & Anti-Cloning Invariants
 
 * **EVM Single-Transition Guard:** A product exists in `{NONE, VALID, REPLAYED}`. The transition `VALID -> REPLAYED` occurs exactly once within `verifyProduct()`. Subsequent scans revert or return `false`.
-* **Pharmacist Single-Scan Invariant:** Enforced via primary key constraints in Supabase `pharmacist_scans(product_id)`.
+* **Pharmacist Single-Scan Invariant:** Enforced via primary key constraints in `pharmacist_scans(product_id)`.
 * **Consumer Per-Factor Invariant:** Enforced via composite keys in `consumer_scans(product_id, factor)`.
 * **Physical Tamper Detection:** Rejects packaging photos with Laplacian blur variance `< 70%` of template, color distance `> 80.0`, or edge centroid drift `> 12.0`.
